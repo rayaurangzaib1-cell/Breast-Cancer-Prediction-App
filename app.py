@@ -9,6 +9,7 @@ Developed by Aurang Zeb
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import joblib
 import numpy as np
 import pandas as pd
@@ -106,6 +107,19 @@ st.markdown("""
         border-radius:8px; padding:10px 18px; border:none;
     }
     .stButton>button:hover{ background: var(--lab-navy); color:white; }
+
+    /* ---------- PRINT MODE ---------- */
+    @media print{
+        /* hide everything by default */
+        body *{ visibility:hidden; }
+        /* reveal only the printable report block and its children */
+        #print-area, #print-area *{ visibility:visible; }
+        #print-area{
+            position:absolute; left:0; top:0; width:100%; margin:0; padding:0;
+        }
+        section[data-testid="stSidebar"]{ display:none !important; }
+        .stButton, .stDownloadButton, .stTabs{ display:none !important; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -324,6 +338,7 @@ if generate:
         confidence_line = f"<div style='text-align:center; color:#5b6b7b; font-size:13px;'>Model confidence: {conf*100:.1f}%</div>"
 
     st.markdown(f"""
+    <div id="print-area">
     <div class="report-card">
         <div class="report-letterhead">
             <div>
@@ -360,6 +375,7 @@ if generate:
         weight = "700" if row["Status"] == "Abnormal" else "500"
         return [f"color:{color}; font-weight:{weight};" if col == "Status" else "" for col in row.index]
 
+    # on-screen interactive table (not print-friendly, kept for easy scrolling)
     st.dataframe(
         report_df.style.apply(highlight_status, axis=1),
         use_container_width=True,
@@ -367,9 +383,33 @@ if generate:
         height=420,
     )
 
+    # print-safe plain HTML table (this is the one that actually gets printed)
+    param_table_html = "".join(
+        f"""<tr>
+                <td>{r['Parameter']}</td>
+                <td>{r['Patient Value']}</td>
+                <td>{r['Reference Range (Benign)']}</td>
+                <td style="color:{'#b91c1c' if r['Status']=='Abnormal' else '#15803d'}; font-weight:700;">{r['Status']}</td>
+            </tr>"""
+        for r in rows
+    )
+
     st.markdown(f"""
     <div class="report-card" style="margin-top:14px;">
-        <p style="font-size:13.5px; color:#334155;">
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+                <tr style="background:#0b2545; color:white;">
+                    <th style="padding:6px 10px; text-align:left;">Parameter</th>
+                    <th style="padding:6px 10px; text-align:left;">Patient Value</th>
+                    <th style="padding:6px 10px; text-align:left;">Reference Range (Benign)</th>
+                    <th style="padding:6px 10px; text-align:left;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {param_table_html}
+            </tbody>
+        </table>
+        <p style="font-size:13.5px; color:#334155; margin-top:16px;">
         <b>Clinical Note:</b> Parameters marked <span class="status-abnormal">Abnormal</span>
         fall outside the typical benign reference range (mean ± 1 SD, derived from the
         Wisconsin Diagnostic Breast Cancer reference dataset) and may indicate malignant
@@ -382,7 +422,20 @@ if generate:
             <span>This is an AI-generated screening report, not a certified medical diagnosis.</span>
         </div>
     </div>
+    </div>
     """, unsafe_allow_html=True)
+
+    # ---- Print button (triggers the browser's native print dialog) ----
+    st.markdown("<br>", unsafe_allow_html=True)
+    components.html("""
+        <div style="display:flex; justify-content:center;">
+            <button onclick="window.parent.print()"
+                style="background:#0f766e; color:white; font-weight:600; font-size:15px;
+                       border:none; border-radius:8px; padding:10px 22px; cursor:pointer;">
+                🖨️ Print Report
+            </button>
+        </div>
+    """, height=60)
 
     # ---- Downloads ----
     text_report = f"""BIO-SCAN AI DIAGNOSTIC LABORATORY
